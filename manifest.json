@@ -1,0 +1,23 @@
+{
+  "manifest_version": 3,
+  "name": "Linkkf Player Tools",
+  "version": "0.5.6",
+  "description": "Adds web-fullscreen and Picture-in-Picture controls to Linkkf video players.",
+  "action": {
+    "default_title": "Linkkf Player Tools"
+  },
+  "content_scripts": [
+    {
+      "matches": [
+        "https://linkkf.tckopke.com/*",
+        "https://*.linkkf.tckopke.com/*",
+        "https://play.sub3.top/*",
+        "https://playv2.sub3.top/*"
+      ],
+      "js": ["content.js"],
+      "css": ["content.css"],
+      "all_frames": true,
+      "run_at": "document_idle"
+    }
+  ]
+}
