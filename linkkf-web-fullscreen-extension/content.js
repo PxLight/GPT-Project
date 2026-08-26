@@ -1,5 +1,33 @@
-(() => {
+(async () => {
   "use strict";
+
+  const EXTENSION_ENABLED_KEY = "lkfExtensionEnabled";
+  const EXTENSION_ENABLED_CLASS = "lkf-extension-enabled";
+  const QUALITY_BRIDGE_ENABLE_EVENT = "lkf-quality-bridge-enable";
+
+  if (window === window.top) {
+    chrome.storage.onChanged.addListener((changes, areaName) => {
+      if (areaName !== "local" || !changes[EXTENSION_ENABLED_KEY] ||
+        changes[EXTENSION_ENABLED_KEY].oldValue ===
+          changes[EXTENSION_ENABLED_KEY].newValue) return;
+      location.reload();
+    });
+  }
+
+  let extensionEnabled = true;
+  try {
+    const stored = await chrome.storage.local.get({
+      [EXTENSION_ENABLED_KEY]: true
+    });
+    extensionEnabled = stored[EXTENSION_ENABLED_KEY] !== false;
+  } catch (error) {
+    console.warn("[Linkkf Player Tools] enabled state could not be read", error);
+    return;
+  }
+
+  if (!extensionEnabled) return;
+  document.documentElement.classList.add(EXTENSION_ENABLED_CLASS);
+  document.dispatchEvent(new CustomEvent(QUALITY_BRIDGE_ENABLE_EVENT));
 
   const TARGET_CLASS = "lkf-web-fullscreen-target";
   const LOCK_CLASS = "lkf-web-fullscreen-lock";
@@ -27,8 +55,25 @@
     ".mediago-placement",
     "[id^='aswift_'][id$='_host']"
   ].join(",");
+  const DISABLED_NATIVE_CONTROL_SELECTOR = [
+    ".art-controls-right > .art-control-control10[aria-label='자막 끄기']",
+    ".art-controls-right > [aria-label='Subtitle Off']",
+    ".art-controls-right > .art-control-hls-quality:not(.lkf-quality-control)"
+  ].join(",");
   const BUTTON_ID = "lkf-web-fullscreen-control";
   const PIP_BUTTON_ID = "lkf-picture-in-picture-control";
+  const FORWARD_90_BUTTON_CLASS = "lkf-forward-90-control";
+  const FORWARD_90_SECONDS = 90;
+  const BACKWARD_10_BUTTON_CLASS = "lkf-backward-10-control";
+  const FORWARD_10_BUTTON_CLASS = "lkf-forward-10-control";
+  const QUALITY_CONTROL_CLASS = "lkf-quality-control";
+  const QUALITY_REQUEST_EVENT = "lkf-quality-request";
+  const QUALITY_RESPONSE_EVENT = "lkf-quality-response";
+  const QUALITY_SET_EVENT = "lkf-quality-set";
+  const SUBTITLE_SIZE_STEP = 5;
+  const SUBTITLE_SIZE_MIN = 10;
+  const SUBTITLE_SIZE_MAX = 120;
+  const SUBTITLE_RESIZE_INSTANT_CLASS = "lkf-subtitle-resize-instant";
   const PIP_STATUS_ID = "lkf-picture-in-picture-status";
   const PIP_PROXY_CLASS = "lkf-picture-in-picture-proxy";
   const PIP_MAX_WIDTH = 1920;
@@ -42,17 +87,20 @@
   const PLAYER_ACTIVE_CLASS = "lkf-web-fullscreen-player-active";
   const PIP_ACTIVE_CLASS = "lkf-picture-in-picture-active";
   const CUSTOM_PLAYER_CLASS = "lkf-sub3-player-customized";
-  const CUSTOM_PLAYER_HOSTS = new Set(["play.sub3.top", "playv2.sub3.top"]);
+  const COMPACT_CONTROLS_CLASS = "lkf-compact-player-controls";
+  const PLAYER_HOST_SUFFIXES = ["sub2.top", "sub3.top", "myani.app"];
   const LINKKF_ORIGIN = "https://linkkf.tckopke.com";
-  const TRUSTED_MESSAGE_ORIGINS = new Set([
-    LINKKF_ORIGIN,
-    "https://play.sub3.top",
-    "https://playv2.sub3.top"
-  ]);
   const isTopFrame = window === window.top;
   let active = null;
   let controlsTimer = null;
   let controlsModeActive = false;
+  let subtitleFontSizeOverride = null;
+  let subtitleOriginalStyles = new WeakMap();
+  let subtitleTransitionFrameId = null;
+  let qualityAvailable = false;
+  let qualityAutoEnabled = true;
+  let qualityCurrentLevel = -1;
+  let qualityLevels = [];
   let observedPipVideo = null;
   let pipSourceVideo = null;
   let pipProxyVideo = null;
@@ -62,13 +110,32 @@
   let pipCanvasTrack = null;
   let pipVideoEnhancer = null;
   let pipWindow = null;
+  let pipSubtitleBaseFontSize = null;
   let pipRenderFrameId = null;
   let pipRenderTimer = null;
+  let pipPausedFrameRefreshTimer = null;
+  let pipPausedFrameRefreshActive = false;
   let pipSubtitleObserver = null;
   let remoteFullscreenActive = false;
   const detachedFullscreenAds = new Map();
 
   const log = (...args) => console.debug("[Linkkf Web Fullscreen]", ...args);
+
+  function isPlayerHost(hostname = location.hostname) {
+    return PLAYER_HOST_SUFFIXES.some((suffix) =>
+      hostname === suffix || hostname.endsWith(`.${suffix}`)
+    );
+  }
+
+  function isTrustedMessageOrigin(origin) {
+    if (origin === LINKKF_ORIGIN) return true;
+    try {
+      const url = new URL(origin);
+      return url.protocol === "https:" && isPlayerHost(url.hostname);
+    } catch (_) {
+      return false;
+    }
+  }
 
   function isVisible(video) {
     if (!(video instanceof HTMLVideoElement) || !video.isConnected) return false;
@@ -253,16 +320,30 @@
   function drawPipSubtitle() {
     if (!pipCanvasContext || !pipCanvas) return;
     const subtitle = readArtPlayerSubtitle();
-    if (!subtitle.lines.length) return;
+    if (!subtitle.lines.length) {
+      delete pipCanvas.dataset.lkfSubtitleFontSize;
+      return;
+    }
 
     const context = pipCanvasContext;
     const scale = pipCanvas.height / subtitle.scaleBaseHeight;
     const maxWidth = pipCanvas.width * 0.94;
     const renderedLines = [];
     for (const line of subtitle.lines) {
-      const fontSize = Math.min(
+      if (!Number.isFinite(pipSubtitleBaseFontSize)) {
+        pipSubtitleBaseFontSize = line.fontSize;
+      }
+      const sizeRatio = Number.isFinite(pipSubtitleBaseFontSize) &&
+        pipSubtitleBaseFontSize > 0
+        ? line.fontSize / pipSubtitleBaseFontSize
+        : 1;
+      const initialFontSize = Math.min(
         pipCanvas.height * 0.07,
-        Math.max(18, line.fontSize * scale)
+        Math.max(18, pipSubtitleBaseFontSize * scale)
+      );
+      const fontSize = Math.min(
+        pipCanvas.height * 0.16,
+        Math.max(12, initialFontSize * sizeRatio)
       );
       context.font = `${line.fontStyle} ${line.fontWeight} ${fontSize}px Arial, sans-serif`;
       for (const text of wrapCanvasText(context, line.text, maxWidth)) {
@@ -270,7 +351,13 @@
       }
     }
 
-    if (!renderedLines.length) return;
+    if (!renderedLines.length) {
+      delete pipCanvas.dataset.lkfSubtitleFontSize;
+      return;
+    }
+    pipCanvas.dataset.lkfSubtitleFontSize = renderedLines
+      .map((line) => line.fontSize.toFixed(2))
+      .join(",");
     const lineHeight = Math.max(...renderedLines.map((line) =>
       Math.max(line.fontSize * 1.25, line.lineHeight * scale)
     ));
@@ -444,6 +531,53 @@
     pipCanvasTrack?.requestFrame?.();
   }
 
+  function getPipCanvasDimensions(video) {
+    const sourceWidth = video.videoWidth || 1280;
+    const sourceHeight = video.videoHeight || 720;
+    const scale = Math.min(1, PIP_MAX_WIDTH / sourceWidth);
+    return {
+      width: Math.max(2, Math.round(sourceWidth * scale)),
+      height: Math.max(2, Math.round(sourceHeight * scale))
+    };
+  }
+
+  function handlePipSourceResize() {
+    if (!pipSourceVideo || !pipCanvas || !pipCanvasContext) return;
+    const { width, height } = getPipCanvasDimensions(pipSourceVideo);
+    if (pipCanvas.width === width && pipCanvas.height === height) return;
+
+    pipCanvas.width = width;
+    pipCanvas.height = height;
+    pipCanvasContext.imageSmoothingEnabled = true;
+    pipCanvasContext.imageSmoothingQuality = "high";
+    pipVideoEnhancer?.gl.getExtension("WEBGL_lose_context")?.loseContext();
+    pipVideoEnhancer = createPipVideoEnhancer(width, height);
+    redrawPipSubtitleNow();
+  }
+
+  function refreshPausedPipFrame() {
+    if (!pipProxyVideo?.paused || !pipSourceVideo?.paused) return;
+
+    clearTimeout(pipPausedFrameRefreshTimer);
+    pipPausedFrameRefreshActive = true;
+    pipProxyVideo.play().then(() => {
+      pipPausedFrameRefreshTimer = setTimeout(() => {
+        pipPausedFrameRefreshTimer = null;
+        if (pipProxyVideo && pipSourceVideo?.paused) pipProxyVideo.pause();
+        pipPausedFrameRefreshActive = false;
+      }, 80);
+    }).catch((error) => {
+      pipPausedFrameRefreshActive = false;
+      log("paused PIP frame refresh failed", error);
+    });
+  }
+
+  function redrawPipSubtitleNow() {
+    if (!pipCanvas || !pipProxyVideo) return;
+    drawPipFrame();
+    refreshPausedPipFrame();
+  }
+
   function schedulePipRendering() {
     drawPipFrame();
     if (typeof pipSourceVideo.requestVideoFrameCallback === "function") {
@@ -458,7 +592,7 @@
 
     const { source } = readArtPlayerSubtitle();
     if (source) {
-      pipSubtitleObserver = new MutationObserver(drawPipFrame);
+      pipSubtitleObserver = new MutationObserver(redrawPipSubtitleNow);
       pipSubtitleObserver.observe(source, {
         attributes: true,
         childList: true,
@@ -478,6 +612,7 @@
 
   function syncProxyPlaybackToSource() {
     if (!pipSourceVideo || !pipProxyVideo) return;
+    if (pipPausedFrameRefreshActive) return;
     if (pipProxyVideo.paused && !pipSourceVideo.paused) pipSourceVideo.pause();
     if (!pipProxyVideo.paused && pipSourceVideo.paused) {
       pipSourceVideo.play().catch((error) => log("source video could not resume", error));
@@ -494,9 +629,13 @@
     pipRenderFrameId = null;
     clearInterval(pipRenderTimer);
     pipRenderTimer = null;
+    clearTimeout(pipPausedFrameRefreshTimer);
+    pipPausedFrameRefreshTimer = null;
+    pipPausedFrameRefreshActive = false;
 
     pipSourceVideo?.removeEventListener("play", syncSourcePlaybackToProxy);
     pipSourceVideo?.removeEventListener("pause", syncSourcePlaybackToProxy);
+    pipSourceVideo?.removeEventListener("resize", handlePipSourceResize);
     pipProxyVideo?.removeEventListener("play", syncProxyPlaybackToSource);
     pipProxyVideo?.removeEventListener("pause", syncProxyPlaybackToSource);
     pipProxyVideo?.removeEventListener("enterpictureinpicture", updatePictureInPictureButton);
@@ -518,6 +657,7 @@
     pipCanvasTrack = null;
     pipVideoEnhancer = null;
     pipWindow = null;
+    pipSubtitleBaseFontSize = null;
   }
 
   function handleProxyPictureInPictureLeave() {
@@ -528,14 +668,19 @@
   async function createPipProxy(video) {
     cleanupPipProxy();
     pipSourceVideo = video;
-    const sourceWidth = video.videoWidth || 1280;
-    const sourceHeight = video.videoHeight || 720;
-    const scale = Math.min(1, PIP_MAX_WIDTH / sourceWidth);
+    const currentSubtitle = getSubtitleElements()[0];
+    const currentSubtitleSize = currentSubtitle
+      ? Number.parseFloat(getComputedStyle(currentSubtitle).fontSize)
+      : Number.NaN;
+    pipSubtitleBaseFontSize = Number.isFinite(currentSubtitleSize)
+      ? currentSubtitleSize
+      : null;
+    const { width, height } = getPipCanvasDimensions(video);
 
     pipCanvas = document.createElement("canvas");
     pipCanvas.className = PIP_PROXY_CLASS;
-    pipCanvas.width = Math.max(2, Math.round(sourceWidth * scale));
-    pipCanvas.height = Math.max(2, Math.round(sourceHeight * scale));
+    pipCanvas.width = width;
+    pipCanvas.height = height;
     pipCanvas.setAttribute("aria-hidden", "true");
     pipCanvasContext = pipCanvas.getContext("2d", { alpha: false });
     if (!pipCanvasContext || typeof pipCanvas.captureStream !== "function") {
@@ -548,6 +693,9 @@
     drawPipFrame();
     pipCanvasStream = pipCanvas.captureStream(30);
     pipCanvasTrack = pipCanvasStream.getVideoTracks()[0] || null;
+    if (pipCanvasTrack && "contentHint" in pipCanvasTrack) {
+      pipCanvasTrack.contentHint = "detail";
+    }
     pipProxyVideo = document.createElement("video");
     pipProxyVideo.className = PIP_PROXY_CLASS;
     pipProxyVideo.muted = true;
@@ -555,6 +703,7 @@
     pipProxyVideo.playsInline = true;
     pipProxyVideo.srcObject = pipCanvasStream;
     document.body.append(pipCanvas, pipProxyVideo);
+    video.addEventListener("resize", handlePipSourceResize);
     schedulePipRendering();
     await pipProxyVideo.play();
     return pipProxyVideo;
@@ -630,11 +779,400 @@
     button.addEventListener("click", (event) => {
       event.preventDefault();
       event.stopImmediatePropagation();
+      button.blur();
       void togglePictureInPicture();
     });
     referenceButton.parentElement.insertBefore(button, referenceButton);
     updatePictureInPictureButton();
     return button;
+  }
+
+  function getSubtitleElements() {
+    return [...document.querySelectorAll(".art-video-player .art-subtitle")]
+      .filter((subtitle) => subtitle instanceof HTMLElement);
+  }
+
+  function beginInstantSubtitleResize(subtitles) {
+    if (subtitleTransitionFrameId !== null) {
+      cancelAnimationFrame(subtitleTransitionFrameId);
+      subtitleTransitionFrameId = null;
+    }
+    document.documentElement.classList.add(SUBTITLE_RESIZE_INSTANT_CLASS);
+    for (const subtitle of subtitles) void subtitle.offsetHeight;
+  }
+
+  function finishInstantSubtitleResize(subtitles) {
+    for (const subtitle of subtitles) void subtitle.offsetHeight;
+    subtitleTransitionFrameId = requestAnimationFrame(() => {
+      document.documentElement.classList.remove(SUBTITLE_RESIZE_INSTANT_CLASS);
+      subtitleTransitionFrameId = null;
+    });
+  }
+
+  function applySubtitleFontSizeOverride(preserveCenter = false) {
+    if (!Number.isFinite(subtitleFontSizeOverride)) return;
+    const subtitles = getSubtitleElements();
+    const originalCenters = preserveCenter
+      ? new Map(subtitles.map((subtitle) => {
+        const rect = subtitle.getBoundingClientRect();
+        return [subtitle, rect.top + rect.height / 2];
+      }))
+      : null;
+    beginInstantSubtitleResize(subtitles);
+
+    for (const subtitle of subtitles) {
+      if (!subtitleOriginalStyles.has(subtitle)) {
+        subtitleOriginalStyles.set(subtitle, {
+          fontSize: subtitle.style.getPropertyValue("font-size"),
+          fontSizePriority: subtitle.style.getPropertyPriority("font-size"),
+          bottom: subtitle.style.getPropertyValue("bottom"),
+          bottomPriority: subtitle.style.getPropertyPriority("bottom")
+        });
+      }
+      subtitle.style.setProperty(
+        "font-size",
+        `${subtitleFontSizeOverride}px`,
+        "important"
+      );
+    }
+
+    if (originalCenters) {
+      for (const subtitle of subtitles) {
+        const originalCenter = originalCenters.get(subtitle);
+        const rect = subtitle.getBoundingClientRect();
+        const computedBottom = getComputedStyle(subtitle).bottom;
+        const bottom = Number.parseFloat(computedBottom);
+        if (!Number.isFinite(originalCenter) || rect.height <= 0 ||
+          !computedBottom.endsWith("px") || !Number.isFinite(bottom)) continue;
+
+        const currentCenter = rect.top + rect.height / 2;
+        subtitle.style.setProperty(
+          "bottom",
+          `${bottom + currentCenter - originalCenter}px`,
+          "important"
+        );
+      }
+    }
+    finishInstantSubtitleResize(subtitles);
+  }
+
+  function restoreStyleProperty(element, property, value, priority) {
+    if (value) element.style.setProperty(property, value, priority);
+    else element.style.removeProperty(property);
+  }
+
+  function resetSubtitleFontSize() {
+    subtitleFontSizeOverride = null;
+    const subtitles = getSubtitleElements();
+    beginInstantSubtitleResize(subtitles);
+    for (const subtitle of subtitles) {
+      const original = subtitleOriginalStyles.get(subtitle);
+      if (!original) continue;
+      restoreStyleProperty(
+        subtitle,
+        "font-size",
+        original.fontSize,
+        original.fontSizePriority
+      );
+      restoreStyleProperty(
+        subtitle,
+        "bottom",
+        original.bottom,
+        original.bottomPriority
+      );
+    }
+    subtitleOriginalStyles = new WeakMap();
+    finishInstantSubtitleResize(subtitles);
+    redrawPipSubtitleNow();
+  }
+
+  function adjustSubtitleFontSize(delta) {
+    const subtitles = getSubtitleElements();
+    const currentSize = Number.isFinite(subtitleFontSizeOverride)
+      ? subtitleFontSizeOverride
+      : Number.parseFloat(subtitles[0] ? getComputedStyle(subtitles[0]).fontSize : "");
+
+    if (!Number.isFinite(currentSize)) {
+      log("subtitle size is unavailable");
+      return;
+    }
+
+    subtitleFontSizeOverride = Math.min(
+      SUBTITLE_SIZE_MAX,
+      Math.max(SUBTITLE_SIZE_MIN, currentSize + delta)
+    );
+    applySubtitleFontSizeOverride(true);
+    redrawPipSubtitleNow();
+  }
+
+  function createSubtitleSizeButton({ className, label, text, delta, reset = false }) {
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = `art-control ${className} lkf-subtitle-size-control hint--rounded hint--top`;
+    button.setAttribute("aria-label", label);
+    button.title = label;
+    button.textContent = text;
+    button.addEventListener("click", (event) => {
+      event.preventDefault();
+      event.stopImmediatePropagation();
+      if (reset) resetSubtitleFontSize();
+      else adjustSubtitleFontSize(delta);
+    });
+    return button;
+  }
+
+  function ensureSubtitleSizeControls(controls) {
+    if (!(controls instanceof HTMLElement)) return;
+
+    for (const control of [...controls.children]) {
+      if (!(control instanceof HTMLElement) ||
+        control.classList.contains("lkf-subtitle-size-control")) continue;
+
+      const text = control.textContent
+        .replace(/\u2212/g, "-")
+        .replace(/\s+/g, "")
+        .toUpperCase();
+      const isLegacySubtitleSizeControl =
+        control.classList.contains("art-control-subtitle-decrease") ||
+        control.classList.contains("art-control-subtitle-increase") ||
+        text === "A-" || text === "A+";
+      if (isLegacySubtitleSizeControl) control.remove();
+    }
+
+    let reset = controls.querySelector(
+      ".art-control-subtitle-reset.lkf-subtitle-size-control"
+    );
+    if (!reset) {
+      reset = createSubtitleSizeButton({
+        className: "art-control-subtitle-reset",
+        label: "자막 크기 원래대로",
+        text: "A↺",
+        delta: 0,
+        reset: true
+      });
+    }
+
+    let decrease = controls.querySelector(
+      ".art-control-subtitle-decrease.lkf-subtitle-size-control"
+    );
+    if (!decrease) {
+      const nativeDecrease = controls.querySelector(".art-control-subtitle-decrease");
+      decrease = createSubtitleSizeButton({
+        className: "art-control-subtitle-decrease",
+        label: "자막 크기 줄이기",
+        text: "A-",
+        delta: -SUBTITLE_SIZE_STEP
+      });
+      nativeDecrease?.replaceWith(decrease);
+    }
+
+    let increase = controls.querySelector(
+      ".art-control-subtitle-increase.lkf-subtitle-size-control"
+    );
+    if (!increase) {
+      const nativeIncrease = controls.querySelector(".art-control-subtitle-increase");
+      increase = createSubtitleSizeButton({
+        className: "art-control-subtitle-increase",
+        label: "자막 크기 키우기",
+        text: "A+",
+        delta: SUBTITLE_SIZE_STEP
+      });
+      nativeIncrease?.replaceWith(increase);
+    }
+
+    controls.querySelectorAll(".art-control-subtitle-decrease")
+      .forEach((control) => {
+        if (control !== decrease) control.remove();
+      });
+    controls.querySelectorAll(".art-control-subtitle-increase")
+      .forEach((control) => {
+        if (control !== increase) control.remove();
+      });
+
+    const reference = controls.querySelector(".art-control-setting") ||
+      controls.querySelector(".art-control-fullscreen");
+    const correctlyPlaced = reset.parentElement === controls &&
+      decrease.parentElement === controls &&
+      increase.parentElement === controls &&
+      reset.nextElementSibling === decrease &&
+      decrease.nextElementSibling === increase &&
+      (!reference || increase.nextElementSibling === reference);
+
+    if (!correctlyPlaced) {
+      if (reference) {
+        controls.insertBefore(reset, reference);
+        controls.insertBefore(decrease, reference);
+        controls.insertBefore(increase, reference);
+      } else {
+        controls.append(reset, decrease, increase);
+      }
+    }
+
+    applySubtitleFontSizeOverride();
+  }
+
+  function requestQualityState() {
+    document.dispatchEvent(new CustomEvent(QUALITY_REQUEST_EVENT));
+  }
+
+  function formatQualityLevel(level) {
+    if (level.name) return level.name;
+    if (level.height > 0) return `${level.height}p`;
+    if (level.width > 0) return `${level.width}px`;
+    if (level.bitrate > 0) {
+      return `${(level.bitrate / 1000000).toFixed(1)} Mbps`;
+    }
+    return `화질 ${level.index + 1}`;
+  }
+
+  function renderQualityControl(control) {
+    if (!(control instanceof HTMLElement)) return;
+    const trigger = control.querySelector(".lkf-quality-trigger");
+    const menu = control.querySelector(".lkf-quality-menu");
+    if (!(trigger instanceof HTMLButtonElement) || !(menu instanceof HTMLElement)) return;
+
+    const selectedLevel = qualityLevels.find((level) =>
+      level.index === qualityCurrentLevel
+    );
+    const selectedLabel = qualityAutoEnabled
+      ? "자동"
+      : selectedLevel ? formatQualityLevel(selectedLevel) : "고정";
+    trigger.disabled = !qualityAvailable;
+    const triggerLabel = qualityAvailable ? selectedLabel : "화질";
+    if (trigger.textContent !== triggerLabel) trigger.textContent = triggerLabel;
+    trigger.setAttribute("aria-label", qualityAvailable
+      ? selectedLabel
+      : "화질 정보를 불러오는 중");
+    trigger.title = trigger.getAttribute("aria-label");
+
+    const renderKey = JSON.stringify({
+      available: qualityAvailable,
+      autoEnabled: qualityAutoEnabled,
+      currentLevel: qualityCurrentLevel,
+      levels: qualityLevels.map((level) => [
+        level.index,
+        level.name,
+        level.width,
+        level.height,
+        level.bitrate
+      ])
+    });
+    if (menu.dataset.renderKey === renderKey) return;
+    menu.dataset.renderKey = renderKey;
+    menu.replaceChildren();
+    if (!qualityAvailable) {
+      const message = document.createElement("div");
+      message.className = "lkf-quality-message";
+      message.textContent = "화질 정보를 불러오는 중";
+      menu.append(message);
+      return;
+    }
+
+    const options = [
+      { index: -1, label: "자동" },
+      ...qualityLevels.map((level) => ({
+        index: level.index,
+        label: formatQualityLevel(level)
+      }))
+    ];
+
+    for (const option of options) {
+      const selected = option.index === -1
+        ? qualityAutoEnabled
+        : !qualityAutoEnabled && option.index === qualityCurrentLevel;
+      const item = document.createElement("button");
+      item.type = "button";
+      item.className = "lkf-quality-option";
+      item.setAttribute("role", "menuitemradio");
+      item.setAttribute("aria-checked", String(selected));
+      item.dataset.levelIndex = String(option.index);
+      item.textContent = `${selected ? "✓ " : ""}${option.label}`;
+      item.addEventListener("click", (event) => {
+        event.preventDefault();
+        event.stopImmediatePropagation();
+        qualityAutoEnabled = option.index === -1;
+        qualityCurrentLevel = option.index;
+        document.dispatchEvent(new CustomEvent(QUALITY_SET_EVENT, {
+          detail: JSON.stringify({ index: option.index })
+        }));
+        control.classList.remove("lkf-quality-open");
+        trigger.setAttribute("aria-expanded", "false");
+        document.querySelectorAll(`.${QUALITY_CONTROL_CLASS}`)
+          .forEach((qualityControl) => renderQualityControl(qualityControl));
+        if (controlsModeActive) showControlsForThreeSeconds();
+      });
+      menu.append(item);
+    }
+  }
+
+  function handleQualityResponse(event) {
+    let data;
+    try {
+      data = typeof event.detail === "string"
+        ? JSON.parse(event.detail)
+        : event.detail;
+    } catch (error) {
+      log("quality response could not be parsed", error);
+      return;
+    }
+    if (!data || typeof data !== "object") return;
+
+    qualityAvailable = Boolean(data.available);
+    qualityAutoEnabled = data.autoEnabled !== false;
+    qualityCurrentLevel = Number.isInteger(data.currentLevel)
+      ? data.currentLevel
+      : -1;
+    qualityLevels = Array.isArray(data.levels)
+      ? data.levels.filter((level) => level && Number.isInteger(level.index))
+      : [];
+    document.querySelectorAll(`.${QUALITY_CONTROL_CLASS}`)
+      .forEach((control) => renderQualityControl(control));
+  }
+
+  function ensureQualityControl(controls) {
+    if (!(controls instanceof HTMLElement)) return;
+
+    let control = controls.querySelector(`:scope > .${QUALITY_CONTROL_CLASS}`);
+    if (!control) {
+      control = document.createElement("div");
+      control.className = `art-control ${QUALITY_CONTROL_CLASS}`;
+
+      const trigger = document.createElement("button");
+      trigger.type = "button";
+      trigger.className = "lkf-quality-trigger hint--rounded hint--top";
+      trigger.textContent = "화질";
+      trigger.setAttribute("aria-haspopup", "menu");
+      trigger.setAttribute("aria-expanded", "false");
+      trigger.addEventListener("click", (event) => {
+        event.preventDefault();
+        event.stopImmediatePropagation();
+        const opening = !control.classList.contains("lkf-quality-open");
+        document.querySelectorAll(`.${QUALITY_CONTROL_CLASS}`)
+          .forEach((qualityControl) => {
+            qualityControl.classList.remove("lkf-quality-open");
+            qualityControl.querySelector(".lkf-quality-trigger")
+              ?.setAttribute("aria-expanded", "false");
+          });
+        control.classList.toggle("lkf-quality-open", opening);
+        trigger.setAttribute("aria-expanded", String(opening));
+        if (opening) requestQualityState();
+      });
+
+      const menu = document.createElement("div");
+      menu.className = "lkf-quality-menu";
+      menu.setAttribute("role", "menu");
+      menu.setAttribute("aria-label", "화질 선택");
+      control.append(trigger, menu);
+    }
+
+    const reset = controls.querySelector(
+      ".art-control-subtitle-reset.lkf-subtitle-size-control"
+    );
+    if (reset && control.nextElementSibling !== reset) {
+      controls.insertBefore(control, reset);
+    }
+    renderQualityControl(control);
+    requestQualityState();
   }
 
   function createPictureInPictureStatus() {
@@ -657,17 +1195,196 @@
     return status;
   }
 
+  function findForwardTenControl(controls) {
+    return [...controls.children].find((control) => {
+      if (!(control instanceof HTMLElement)) return false;
+      if (control.classList.contains("art-control-control9")) return true;
+
+      const accessibleNames = [
+        control.getAttribute("aria-label"),
+        control.getAttribute("title"),
+        control.textContent
+      ].filter(Boolean).map((value) => value.replace(/\s+/g, "").toLowerCase());
+      return accessibleNames.some((name) => name === "10+" ||
+        name.includes("10초앞으로") || name.includes("forward10"));
+    }) || null;
+  }
+
+  function findBackwardTenControl(controls) {
+    return [...controls.children].find((control) => {
+      if (!(control instanceof HTMLElement)) return false;
+      if (control.classList.contains("art-control-control8")) return true;
+
+      const accessibleNames = [
+        control.getAttribute("aria-label"),
+        control.getAttribute("title"),
+        control.textContent
+      ].filter(Boolean).map((value) => value.replace(/\s+/g, "").toLowerCase());
+      return accessibleNames.some((name) => name === "10-" ||
+        name.includes("10초뒤로") || name.includes("backward10") ||
+        name.includes("rewind10"));
+    }) || null;
+  }
+
+  function createSeekControl({ className, artClassName, text, label, seconds }) {
+    const control = document.createElement("button");
+    control.type = "button";
+    control.className = `art-control ${artClassName} ${className} ` +
+      "lkf-ten-second-seek-control hint--rounded hint--top";
+    control.setAttribute("aria-label", label);
+    control.title = label;
+    control.textContent = text;
+    control.addEventListener("click", (event) => {
+      event.preventDefault();
+      event.stopImmediatePropagation();
+      seekPlaybackBySeconds(seconds);
+    });
+    return control;
+  }
+
+  function ensureTenSecondSeekControls(controls) {
+    let backward = findBackwardTenControl(controls);
+    if (!backward) {
+      backward = createSeekControl({
+        className: BACKWARD_10_BUTTON_CLASS,
+        artClassName: "art-control-control8",
+        text: "10-",
+        label: "10초 뒤로",
+        seconds: -10
+      });
+    }
+
+    let forward = findForwardTenControl(controls);
+    if (!forward) {
+      forward = createSeekControl({
+        className: FORWARD_10_BUTTON_CLASS,
+        artClassName: "art-control-control9",
+        text: "10+",
+        label: "10초 앞으로",
+        seconds: 10
+      });
+    }
+
+    const seekControls = [
+      { control: backward, text: "10-", label: "10초 뒤로" },
+      { control: forward, text: "10+", label: "10초 앞으로" }
+    ];
+
+    for (const { control, text, label } of seekControls) {
+      if (!(control instanceof HTMLElement)) continue;
+      control.classList.add("lkf-ten-second-seek-control");
+      control.setAttribute("aria-label", label);
+      control.setAttribute("title", label);
+      if (control.children.length || control.textContent.trim() !== text) {
+        control.replaceChildren(document.createTextNode(text));
+      }
+    }
+
+    const volume = controls.querySelector(":scope > .art-control-volume");
+    const play = controls.querySelector(":scope > .art-control-playAndPause");
+    const anchor = volume || play;
+    if (anchor && anchor.nextElementSibling !== backward) {
+      controls.insertBefore(backward, anchor.nextElementSibling);
+    } else if (!anchor && controls.firstElementChild !== backward) {
+      controls.prepend(backward);
+    }
+    if (backward.nextElementSibling !== forward) {
+      controls.insertBefore(forward, backward.nextElementSibling);
+    }
+  }
+
+  function ensurePrimaryControlsFirst(controls) {
+    if (!(controls instanceof HTMLElement)) return;
+
+    const play = controls.querySelector(":scope > .art-control-playAndPause");
+    const volume = controls.querySelector(":scope > .art-control-volume");
+    if (!(play instanceof HTMLElement) || !(volume instanceof HTMLElement)) return;
+
+    if (controls.firstElementChild !== play || play.nextElementSibling !== volume) {
+      controls.prepend(play, volume);
+    }
+  }
+
+  function seekPlaybackBySeconds(seconds) {
+    // PIP mode intentionally makes the original ArtPlayer video transparent,
+    // so findBestVideo() no longer treats it as visible. Keep seeking the
+    // source media that feeds the composite PIP stream in that state.
+    const video = pipSourceVideo?.isConnected ? pipSourceVideo : findBestVideo();
+    if (!(video instanceof HTMLVideoElement)) {
+      log("seek video is unavailable", seconds);
+      return;
+    }
+
+    const targetTime = Math.max(0, video.currentTime + seconds);
+    const refreshPipAfterSeek = video === pipSourceVideo && pipProxyVideo
+      ? () => redrawPipSubtitleNow()
+      : null;
+    refreshPipAfterSeek && video.addEventListener(
+      "seeked",
+      refreshPipAfterSeek,
+      { once: true }
+    );
+    video.currentTime = Number.isFinite(video.duration)
+      ? Math.min(targetTime, video.duration)
+      : targetTime;
+    if (refreshPipAfterSeek) redrawPipSubtitleNow();
+    if (controlsModeActive) showControlsForThreeSeconds();
+  }
+
+  function ensureForwardNinetyControl(controls) {
+    if (!(controls instanceof HTMLElement)) return;
+
+    const forwardTen = findForwardTenControl(controls);
+    if (!forwardTen) return;
+
+    const duplicates = [...controls.querySelectorAll(`.${FORWARD_90_BUTTON_CLASS}`)];
+    let button = duplicates.shift() || null;
+    duplicates.forEach((control) => control.remove());
+
+    if (!button) {
+      button = document.createElement("button");
+      button.type = "button";
+      button.className = `art-control ${FORWARD_90_BUTTON_CLASS} hint--rounded hint--top`;
+      button.setAttribute("aria-label", "90초 앞으로");
+      button.title = "90초 앞으로";
+      button.textContent = "90+";
+      button.addEventListener("click", (event) => {
+        event.preventDefault();
+        event.stopImmediatePropagation();
+        seekPlaybackBySeconds(FORWARD_90_SECONDS);
+      });
+    }
+
+    if (forwardTen.nextElementSibling !== button) {
+      controls.insertBefore(button, forwardTen.nextElementSibling);
+    }
+  }
+
   function createPlayerButton() {
     if (isTopFrame) return;
 
     document.querySelectorAll(".art-control-screenshot").forEach((control) => control.remove());
-    if (CUSTOM_PLAYER_HOSTS.has(location.hostname)) {
+    document.querySelectorAll(DISABLED_NATIVE_CONTROL_SELECTOR)
+      .forEach((control) => control.remove());
+    if (isPlayerHost()) {
       document.querySelectorAll(
         ".art-control-subtitle-backdrop, .art-control-subtitle-color"
       ).forEach((control) => control.remove());
     }
     createPictureInPictureStatus();
     observePictureInPictureVideo(findBestVideo());
+
+    document.querySelectorAll(".art-video-player .art-controls-right")
+      .forEach((controls) => {
+        ensureSubtitleSizeControls(controls);
+        ensureQualityControl(controls);
+      });
+    document.querySelectorAll(".art-video-player .art-controls-left")
+      .forEach((controls) => {
+        ensurePrimaryControlsFirst(controls);
+        ensureTenSecondSeekControls(controls);
+        ensureForwardNinetyControl(controls);
+      });
 
     const setting = document.querySelector(".art-controls-right .art-control-setting");
     const fullscreen = document.querySelector(".art-controls-right .art-control-fullscreen");
@@ -689,12 +1406,14 @@
       button.addEventListener("click", (event) => {
         event.preventDefault();
         event.stopImmediatePropagation();
+        button.blur();
         requestToggle();
       });
       button.addEventListener("keydown", (event) => {
-        if (event.key !== "Enter" && event.key !== " ") return;
+        if (event.key !== "Enter") return;
         event.preventDefault();
         event.stopImmediatePropagation();
+        button.blur();
         requestToggle();
       });
       fullscreen.parentElement.insertBefore(button, fullscreen);
@@ -735,30 +1454,43 @@
     showControlsForThreeSeconds();
   }
 
-  function toggleVideoPlayback() {
-    const video = document.querySelector(".art-video-player video");
-    if (!(video instanceof HTMLVideoElement)) return;
+  function getPlaybackVideo() {
+    return pipSourceVideo?.isConnected ? pipSourceVideo : findBestVideo();
+  }
+
+  function toggleVideoPlayback(video = getPlaybackVideo()) {
+    if (!(video instanceof HTMLVideoElement)) return false;
 
     if (video.paused || video.ended) {
       video.play().catch((error) => log("playback could not start", error));
     } else {
       video.pause();
     }
+    return true;
   }
 
   function handlePlaybackHotkey(event) {
-    if (!controlsModeActive ||
-      !(event.code === "Space" || event.key === " " || event.key === "Spacebar")) return;
+    const isSpace = event.code === "Space" ||
+      event.key === " " || event.key === "Spacebar";
+    if (!isSpace) return;
 
     const target = event.target;
     if (target instanceof HTMLElement && target.matches(
-      "input, textarea, select, button, [contenteditable='true']"
+      "input, textarea, select, [contenteditable='true']"
     )) return;
 
+    const video = getPlaybackVideo();
+    if (!(video instanceof HTMLVideoElement)) return;
+
+    // Own Space for every supported player. Some ArtPlayer variants handle
+    // keydown while others also react on keyup or synthesize a focused-button
+    // click, which can otherwise pause and immediately resume the video.
     event.preventDefault();
     event.stopImmediatePropagation();
-    toggleVideoPlayback();
-    showControlsForThreeSeconds();
+    if (event.type !== "keydown" || event.repeat) return;
+
+    toggleVideoPlayback(video);
+    if (controlsModeActive) showControlsForThreeSeconds();
   }
 
   function createFullscreenBackdrop() {
@@ -944,12 +1676,14 @@
     document.addEventListener("pointerdown", handlePlayerActivity, true);
     document.addEventListener("touchstart", handlePlayerActivity, true);
     document.addEventListener("keydown", handlePlayerActivity, true);
-    document.addEventListener("keydown", handlePlaybackHotkey, true);
+    // Capture at Window before ArtPlayer's document/player shortcuts.
+    window.addEventListener("keydown", handlePlaybackHotkey, true);
+    window.addEventListener("keyup", handlePlaybackHotkey, true);
   }
 
   if (isTopFrame) {
     window.addEventListener("message", (event) => {
-      if (event.source === window || !TRUSTED_MESSAGE_ORIGINS.has(event.origin)) return;
+      if (event.source === window || !isTrustedMessageOrigin(event.origin)) return;
       if (event.data?.type === ESCAPE_MESSAGE && active) exitFullscreen();
       if (event.data?.type === TOGGLE_MESSAGE) toggle();
       if (event.data?.type === READY_MESSAGE) {
@@ -996,8 +1730,25 @@
   function init() {
     document.documentElement.classList.toggle(
       CUSTOM_PLAYER_CLASS,
-      CUSTOM_PLAYER_HOSTS.has(location.hostname)
+      isPlayerHost()
     );
+    document.documentElement.classList.toggle(
+      COMPACT_CONTROLS_CLASS,
+      /\/(?:r2|b2)\/(?:play|nss2|n2)\.php$/i.test(location.pathname)
+    );
+    if (!isTopFrame && isPlayerHost()) {
+      document.addEventListener(QUALITY_RESPONSE_EVENT, handleQualityResponse);
+      document.addEventListener("pointerdown", (event) => {
+        if (event.target instanceof Element &&
+          event.target.closest(`.${QUALITY_CONTROL_CLASS}`)) return;
+        document.querySelectorAll(`.${QUALITY_CONTROL_CLASS}.lkf-quality-open`)
+          .forEach((control) => {
+            control.classList.remove("lkf-quality-open");
+            control.querySelector(".lkf-quality-trigger")
+              ?.setAttribute("aria-expanded", "false");
+          });
+      }, true);
+    }
     if (isTopFrame) {
       observer.observe(document.documentElement, { childList: true, subtree: true });
     } else {

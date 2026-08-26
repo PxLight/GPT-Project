@@ -1,15 +1,15 @@
-html.lkf-web-fullscreen-lock,
-body.lkf-web-fullscreen-lock {
+html.lkf-extension-enabled.lkf-web-fullscreen-lock,
+html.lkf-extension-enabled body.lkf-web-fullscreen-lock {
   overflow: hidden !important;
 }
 
-body.lkf-web-fullscreen-lock {
+html.lkf-extension-enabled body.lkf-web-fullscreen-lock {
   margin: 0 !important;
 }
 
 /* Remove every ancestor stacking context that can trap the fixed player
    below a site ad. The iframe stays in place, so playback is not reloaded. */
-body.lkf-web-fullscreen-lock .lkf-web-fullscreen-layer-path {
+html.lkf-extension-enabled body.lkf-web-fullscreen-lock .lkf-web-fullscreen-layer-path {
   position: static !important;
   z-index: auto !important;
   overflow: visible !important;
@@ -27,13 +27,13 @@ body.lkf-web-fullscreen-lock .lkf-web-fullscreen-layer-path {
   will-change: auto !important;
 }
 
-body.lkf-web-fullscreen-lock .lkf-web-fullscreen-suppressed {
+html.lkf-extension-enabled body.lkf-web-fullscreen-lock .lkf-web-fullscreen-suppressed {
   visibility: hidden !important;
   opacity: 0 !important;
   pointer-events: none !important;
 }
 
-#lkf-web-fullscreen-backdrop {
+html.lkf-extension-enabled #lkf-web-fullscreen-backdrop {
   position: fixed !important;
   inset: 0 !important;
   z-index: 2147483646 !important;
@@ -44,15 +44,15 @@ body.lkf-web-fullscreen-lock .lkf-web-fullscreen-suppressed {
 /* Hide known anchor-ad hosts immediately while the script detaches their
    outer containers. Detachment is what defeats inline !important rules and
    closed shadow-root content; these selectors also prevent a one-frame flash. */
-html:is(.lkf-web-fullscreen-lock, .lkf-web-fullscreen-player-active) ins.adsbygoogle,
-html:is(.lkf-web-fullscreen-lock, .lkf-web-fullscreen-player-active) .adsbygoogle-noablate,
-html:is(.lkf-web-fullscreen-lock, .lkf-web-fullscreen-player-active) [data-anchor-status="displayed"],
-html:is(.lkf-web-fullscreen-lock, .lkf-web-fullscreen-player-active) [data-anchor-shown="true"],
-html:is(.lkf-web-fullscreen-lock, .lkf-web-fullscreen-player-active) iframe[title="Advertisement"],
-html:is(.lkf-web-fullscreen-lock, .lkf-web-fullscreen-player-active) iframe[aria-label="Advertisement"],
-html:is(.lkf-web-fullscreen-lock, .lkf-web-fullscreen-player-active) iframe[src*="googleads.g.doubleclick.net"],
-html:is(.lkf-web-fullscreen-lock, .lkf-web-fullscreen-player-active) [id^="mgcontainer-"],
-html:is(.lkf-web-fullscreen-lock, .lkf-web-fullscreen-player-active) .mediago-placement {
+html.lkf-extension-enabled:is(.lkf-web-fullscreen-lock, .lkf-web-fullscreen-player-active) ins.adsbygoogle,
+html.lkf-extension-enabled:is(.lkf-web-fullscreen-lock, .lkf-web-fullscreen-player-active) .adsbygoogle-noablate,
+html.lkf-extension-enabled:is(.lkf-web-fullscreen-lock, .lkf-web-fullscreen-player-active) [data-anchor-status="displayed"],
+html.lkf-extension-enabled:is(.lkf-web-fullscreen-lock, .lkf-web-fullscreen-player-active) [data-anchor-shown="true"],
+html.lkf-extension-enabled:is(.lkf-web-fullscreen-lock, .lkf-web-fullscreen-player-active) iframe[title="Advertisement"],
+html.lkf-extension-enabled:is(.lkf-web-fullscreen-lock, .lkf-web-fullscreen-player-active) iframe[aria-label="Advertisement"],
+html.lkf-extension-enabled:is(.lkf-web-fullscreen-lock, .lkf-web-fullscreen-player-active) iframe[src*="googleads.g.doubleclick.net"],
+html.lkf-extension-enabled:is(.lkf-web-fullscreen-lock, .lkf-web-fullscreen-player-active) [id^="mgcontainer-"],
+html.lkf-extension-enabled:is(.lkf-web-fullscreen-lock, .lkf-web-fullscreen-player-active) .mediago-placement {
   display: none !important;
   visibility: hidden !important;
   opacity: 0 !important;
@@ -61,51 +61,61 @@ html:is(.lkf-web-fullscreen-lock, .lkf-web-fullscreen-player-active) .mediago-pl
 
 /* The site header (logo, history, login and its dropdowns) should not remain
    interactive above the player while web fullscreen is active. */
-body.lkf-web-fullscreen-lock .head-wrapper,
-body.lkf-web-fullscreen-lock .member-foot,
-body.lkf-web-fullscreen-lock .server-list,
-body.lkf-web-fullscreen-lock .ewave-player-footer,
-body.lkf-web-fullscreen-lock .player-tips,
-body.lkf-web-fullscreen-lock .box-head {
+html.lkf-extension-enabled body.lkf-web-fullscreen-lock .head-wrapper,
+html.lkf-extension-enabled body.lkf-web-fullscreen-lock .member-foot,
+html.lkf-extension-enabled body.lkf-web-fullscreen-lock .server-list,
+html.lkf-extension-enabled body.lkf-web-fullscreen-lock .ewave-player-footer,
+html.lkf-extension-enabled body.lkf-web-fullscreen-lock .player-tips,
+html.lkf-extension-enabled body.lkf-web-fullscreen-lock .box-head {
   display: none !important;
 }
 
 /* In web-fullscreen mode, the extension owns ArtPlayer's controller timeout.
    Activity shows it and restarts a three-second timer; inactivity hides it. */
-html.lkf-web-fullscreen-controls-mode .art-video-player .art-bottom {
+html.lkf-extension-enabled.lkf-web-fullscreen-controls-mode .art-video-player .art-bottom {
   opacity: 0 !important;
   visibility: hidden !important;
   pointer-events: none !important;
   transform: translateY(100%) !important;
 }
 
-html.lkf-web-fullscreen-controls-visible .art-video-player .art-bottom {
+html.lkf-extension-enabled.lkf-web-fullscreen-controls-visible .art-video-player .art-bottom {
   opacity: 1 !important;
   visibility: visible !important;
   pointer-events: none !important;
   transform: translateY(0) !important;
 }
 
-html.lkf-web-fullscreen-controls-visible .art-video-player .art-progress,
-html.lkf-web-fullscreen-controls-visible .art-video-player .art-controls {
+html.lkf-extension-enabled.lkf-web-fullscreen-controls-visible .art-video-player .art-progress,
+html.lkf-extension-enabled.lkf-web-fullscreen-controls-visible .art-video-player .art-controls {
   pointer-events: auto !important;
+}
+
+/* The extension hides the controller after three idle seconds, but some
+   ArtPlayer builds leave the video cursor set to pointer. Hide it during the
+   same idle state; the next pointer movement restores both immediately. */
+html.lkf-extension-enabled.lkf-web-fullscreen-controls-mode:not(.lkf-web-fullscreen-controls-visible)
+.art-video-player,
+html.lkf-extension-enabled.lkf-web-fullscreen-controls-mode:not(.lkf-web-fullscreen-controls-visible)
+.art-video-player * {
+  cursor: none !important;
 }
 
 /* Disable every Linkkf page control during web fullscreen. The selected
    player (an iframe on the current site) and its native controls are the only
    interactive surface that remains. Escape is handled by the content script. */
-body.lkf-web-fullscreen-lock * {
+html.lkf-extension-enabled body.lkf-web-fullscreen-lock * {
   pointer-events: none !important;
 }
 
-body.lkf-web-fullscreen-lock .lkf-web-fullscreen-target,
-body.lkf-web-fullscreen-lock .lkf-web-fullscreen-target * {
+html.lkf-extension-enabled body.lkf-web-fullscreen-lock .lkf-web-fullscreen-target,
+html.lkf-extension-enabled body.lkf-web-fullscreen-lock .lkf-web-fullscreen-target * {
   pointer-events: auto !important;
 }
 
 /* Only the selected player is elevated. Its ArtPlayer controls remain inside
    this element and keep their own stacking order and event handlers. */
-body .lkf-web-fullscreen-target {
+html.lkf-extension-enabled body .lkf-web-fullscreen-target {
   position: fixed !important;
   inset: 0 !important;
   box-sizing: border-box !important;
@@ -123,21 +133,21 @@ body .lkf-web-fullscreen-target {
   isolation: isolate !important;
 }
 
-body .lkf-web-fullscreen-target video {
+html.lkf-extension-enabled body .lkf-web-fullscreen-target video {
   width: 100% !important;
   height: 100% !important;
   object-fit: contain !important;
 }
 
-#lkf-web-fullscreen-control,
-#lkf-picture-in-picture-control {
+html.lkf-extension-enabled #lkf-web-fullscreen-control,
+html.lkf-extension-enabled #lkf-picture-in-picture-control {
   position: relative;
   display: flex;
-  flex: 0 0 40px;
+  flex: 0 0 36px;
   align-items: center;
   justify-content: center;
   box-sizing: border-box;
-  width: 40px;
+  width: 36px;
   height: 100%;
   padding: 0;
   border: 0;
@@ -148,40 +158,288 @@ body .lkf-web-fullscreen-target video {
   opacity: 1;
 }
 
-#lkf-web-fullscreen-control svg,
-#lkf-picture-in-picture-control svg {
+html.lkf-extension-enabled #lkf-web-fullscreen-control svg,
+html.lkf-extension-enabled #lkf-picture-in-picture-control svg {
   display: block;
   width: 24px;
   height: 24px;
   fill: currentColor;
 }
 
-#lkf-web-fullscreen-control:hover,
-#lkf-web-fullscreen-control:focus-visible,
-#lkf-picture-in-picture-control:hover,
-#lkf-picture-in-picture-control:focus-visible {
+html.lkf-extension-enabled #lkf-web-fullscreen-control:hover,
+html.lkf-extension-enabled #lkf-web-fullscreen-control:focus-visible,
+html.lkf-extension-enabled #lkf-picture-in-picture-control:hover,
+html.lkf-extension-enabled #lkf-picture-in-picture-control:focus-visible {
   color: var(--art-theme, #23ade5);
   outline: 0;
 }
 
-html.lkf-web-fullscreen-player-active #lkf-web-fullscreen-control {
+/* Keep subtitle sizing available on every supported ArtPlayer variant. */
+html.lkf-extension-enabled .art-video-player .art-controls-right > .art-control-subtitle-reset,
+html.lkf-extension-enabled .art-video-player .art-controls-right > .art-control-subtitle-decrease,
+html.lkf-extension-enabled .art-video-player .art-controls-right > .art-control-subtitle-increase {
+  display: flex !important;
+  visibility: visible !important;
+  flex: 0 0 36px;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
+  width: 36px;
+  height: 100%;
+  opacity: 1 !important;
+  pointer-events: auto !important;
+}
+
+html.lkf-extension-enabled .art-video-player .art-controls-right > .lkf-subtitle-size-control {
+  position: relative;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: #fff;
+  font: 700 14px/1 Arial, sans-serif;
+  cursor: pointer;
+}
+
+html.lkf-extension-enabled .art-video-player .art-controls-right > .lkf-subtitle-size-control:hover,
+html.lkf-extension-enabled .art-video-player .art-controls-right > .lkf-subtitle-size-control:focus-visible {
+  color: var(--art-theme, #23ade5);
+  outline: 0;
+}
+
+/* Use the subtitle-size control as the width baseline for every active
+   right-side button. Player variants with a larger native min-width retain
+   that minimum, so all controls stay equal within each player. */
+html.lkf-extension-enabled .art-video-player .art-controls-right > .lkf-subtitle-size-control,
+html.lkf-extension-enabled .art-video-player .art-controls-right > .lkf-quality-control,
+html.lkf-extension-enabled .art-video-player .art-controls-right > .art-control-setting,
+html.lkf-extension-enabled .art-video-player .art-controls-right > #lkf-picture-in-picture-control,
+html.lkf-extension-enabled .art-video-player .art-controls-right > #lkf-web-fullscreen-control,
+html.lkf-extension-enabled .art-video-player .art-controls-right > .art-control-fullscreen {
+  flex: 0 0 36px !important;
+  width: 36px !important;
+  height: 100% !important;
+  padding: 0 !important;
+}
+
+html.lkf-extension-enabled .art-video-player .art-controls-right > .lkf-quality-control {
+  position: relative;
+  display: flex !important;
+  align-items: center;
+  justify-content: center;
+  overflow: visible !important;
+  opacity: 1 !important;
+  visibility: visible !important;
+  pointer-events: auto !important;
+}
+
+html.lkf-extension-enabled .lkf-quality-trigger {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
+  width: 100%;
+  height: 100%;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: #fff;
+  font: 700 11px/1 Arial, sans-serif;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+html.lkf-extension-enabled .lkf-quality-trigger:hover,
+html.lkf-extension-enabled .lkf-quality-trigger:focus-visible,
+html.lkf-extension-enabled .lkf-quality-open .lkf-quality-trigger {
+  color: var(--art-theme, #23ade5);
+  outline: 0;
+}
+
+html.lkf-extension-enabled .lkf-quality-trigger:disabled {
+  color: rgba(255, 255, 255, 0.55);
+  cursor: wait;
+}
+
+html.lkf-extension-enabled .lkf-quality-menu {
+  position: absolute;
+  bottom: calc(100% + 8px);
+  left: 50%;
+  z-index: 120;
+  display: none;
+  min-width: 108px;
+  max-height: 240px;
+  padding: 6px;
+  overflow-x: hidden;
+  overflow-y: auto;
+  transform: translateX(-50%);
+  border-radius: 6px;
+  background: rgba(20, 20, 20, 0.96);
+  box-shadow: 0 4px 18px rgba(0, 0, 0, 0.45);
+}
+
+html.lkf-extension-enabled .lkf-quality-open .lkf-quality-menu {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+html.lkf-extension-enabled .lkf-quality-option,
+html.lkf-extension-enabled .lkf-quality-message {
+  box-sizing: border-box;
+  width: 100%;
+  min-height: 30px;
+  padding: 7px 10px;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  color: #fff;
+  font: 600 12px/1.2 Arial, sans-serif;
+  text-align: left;
+  white-space: nowrap;
+}
+
+html.lkf-extension-enabled .lkf-quality-option {
+  cursor: pointer;
+}
+
+html.lkf-extension-enabled .lkf-quality-option:hover,
+html.lkf-extension-enabled .lkf-quality-option:focus-visible,
+html.lkf-extension-enabled .lkf-quality-option[aria-checked="true"] {
+  background: rgba(35, 173, 229, 0.22);
+  color: var(--art-theme, #23ade5);
+  outline: 0;
+}
+
+html.lkf-extension-enabled .lkf-quality-message {
+  color: rgba(255, 255, 255, 0.72);
+  cursor: default;
+}
+
+html.lkf-extension-enabled .art-video-player .art-controls-right > .art-control-setting svg,
+html.lkf-extension-enabled .art-video-player .art-controls-right > #lkf-picture-in-picture-control svg,
+html.lkf-extension-enabled .art-video-player .art-controls-right > #lkf-web-fullscreen-control svg,
+html.lkf-extension-enabled .art-video-player .art-controls-right > .art-control-fullscreen svg {
+  width: 24px !important;
+  height: 24px !important;
+}
+
+/* Match rewind, forward, play/pause, and volume to the subtitle-button width.
+   Native min-width values still select 36px or 46px for each player build. */
+html.lkf-extension-enabled .art-video-player .art-controls-left > .art-control-control8,
+html.lkf-extension-enabled .art-video-player .art-controls-left > .art-control-control9,
+html.lkf-extension-enabled .art-video-player .art-controls-left > [aria-label="10-"],
+html.lkf-extension-enabled .art-video-player .art-controls-left > [aria-label="10+"],
+html.lkf-extension-enabled .art-video-player .art-controls-left > [aria-label="10초 뒤로"],
+html.lkf-extension-enabled .art-video-player .art-controls-left > [aria-label="10초 앞으로"],
+html.lkf-extension-enabled .art-video-player .art-controls-left > .lkf-forward-90-control,
+html.lkf-extension-enabled .art-video-player .art-controls-left > .art-control-playAndPause {
+  flex: 0 0 36px !important;
+  width: 36px !important;
+  height: 100% !important;
+  padding: 0 !important;
+}
+
+html.lkf-extension-enabled .art-video-player .art-controls-left > .lkf-ten-second-seek-control,
+html.lkf-extension-enabled .art-video-player .art-controls-left > .lkf-forward-90-control {
+  position: relative;
+  display: flex !important;
+  align-items: center;
+  justify-content: center;
+  border: 0;
+  background: transparent;
+  color: #fff;
+  font: 700 12px/1 Arial, sans-serif;
+  cursor: pointer;
+  opacity: 1 !important;
+  visibility: visible !important;
+  pointer-events: auto !important;
+}
+
+html.lkf-extension-enabled .art-video-player .art-controls-left > .lkf-ten-second-seek-control:hover,
+html.lkf-extension-enabled .art-video-player .art-controls-left > .lkf-ten-second-seek-control:focus-visible,
+html.lkf-extension-enabled .art-video-player .art-controls-left > .lkf-forward-90-control:hover,
+html.lkf-extension-enabled .art-video-player .art-controls-left > .lkf-forward-90-control:focus-visible {
+  color: var(--art-theme, #23ade5);
+  outline: 0;
+}
+
+html.lkf-extension-enabled .art-video-player .art-controls-left > .art-control-volume > .art-icon {
+  flex: 0 0 36px !important;
+  width: 36px !important;
+  height: 100% !important;
+}
+
+html.lkf-extension-enabled .art-video-player .art-controls-left > .art-control-control8 svg,
+html.lkf-extension-enabled .art-video-player .art-controls-left > .art-control-control9 svg,
+html.lkf-extension-enabled .art-video-player .art-controls-left > [aria-label="10-"] svg,
+html.lkf-extension-enabled .art-video-player .art-controls-left > [aria-label="10+"] svg,
+html.lkf-extension-enabled .art-video-player .art-controls-left > [aria-label="10초 뒤로"] svg,
+html.lkf-extension-enabled .art-video-player .art-controls-left > [aria-label="10초 앞으로"] svg,
+html.lkf-extension-enabled .art-video-player .art-controls-left > .art-control-playAndPause svg,
+html.lkf-extension-enabled .art-video-player .art-controls-left > .art-control-volume > .art-icon svg {
+  width: 24px !important;
+  height: 24px !important;
+}
+
+/* The compact player keeps a horizontal volume slider inside the control.
+   Collapse only the dormant panel so the resting button is 36px; retain its
+   full 60px adjustment range on hover or keyboard focus. */
+html.lkf-extension-enabled.lkf-compact-player-controls .art-video-player .art-controls-left >
+.art-control-volume .art-volume-panel {
+  width: 0 !important;
+}
+
+html.lkf-extension-enabled.lkf-compact-player-controls .art-video-player .art-controls-left >
+.art-control-volume:hover .art-volume-panel,
+html.lkf-extension-enabled.lkf-compact-player-controls .art-video-player .art-controls-left >
+.art-control-volume:focus-within .art-volume-panel {
+  width: 60px !important;
+}
+
+/* ArtPlayer animates subtitle bottom changes. Disable that transition only
+   while a size adjustment and its center correction are committed, otherwise
+   the PIP renderer samples the intermediate positions as a visible bounce. */
+html.lkf-extension-enabled.lkf-subtitle-resize-instant .art-video-player .art-subtitle,
+html.lkf-extension-enabled.lkf-subtitle-resize-instant .art-video-player .art-subtitle-line {
+  transition: none !important;
+  animation: none !important;
+}
+
+/* Keep subtitles as text only on every supported ArtPlayer. Several player
+   variants continuously reapply an inline black line background, so the
+   important override also covers nested spans and generated backplates. */
+html.lkf-extension-enabled .art-video-player .art-subtitle,
+html.lkf-extension-enabled .art-video-player .art-subtitle-line,
+html.lkf-extension-enabled .art-video-player .art-subtitle > span,
+html.lkf-extension-enabled .art-video-player .art-subtitle-line > span,
+html.lkf-extension-enabled .art-video-player .art-subtitle::before,
+html.lkf-extension-enabled .art-video-player .art-subtitle::after,
+html.lkf-extension-enabled .art-video-player .art-subtitle-line::before,
+html.lkf-extension-enabled .art-video-player .art-subtitle-line::after {
+  background: transparent !important;
+  background-color: transparent !important;
+  background-image: none !important;
+  box-shadow: none !important;
+}
+
+html.lkf-extension-enabled.lkf-web-fullscreen-player-active #lkf-web-fullscreen-control {
   color: var(--art-theme, #23ade5);
 }
 
-html.lkf-picture-in-picture-active #lkf-picture-in-picture-control {
+html.lkf-extension-enabled.lkf-picture-in-picture-active #lkf-picture-in-picture-control {
   color: var(--art-theme, #23ade5);
 }
 
 /* The real media keeps decoding to supply frames and audio to the composite
    PIP stream, but its duplicate picture and DOM subtitles stay hidden in the
    original ArtPlayer until PIP closes. Player controls remain available. */
-html.lkf-picture-in-picture-active .art-video-player .art-video,
-html.lkf-picture-in-picture-active .art-video-player .art-subtitle {
+html.lkf-extension-enabled.lkf-picture-in-picture-active .art-video-player .art-video,
+html.lkf-extension-enabled.lkf-picture-in-picture-active .art-video-player .art-subtitle {
   opacity: 0 !important;
   pointer-events: none !important;
 }
 
-#lkf-picture-in-picture-status {
+html.lkf-extension-enabled #lkf-picture-in-picture-status {
   position: absolute;
   top: 18px;
   left: 18px;
@@ -198,32 +456,44 @@ html.lkf-picture-in-picture-active .art-video-player .art-subtitle {
   user-select: none;
 }
 
-html.lkf-picture-in-picture-active #lkf-picture-in-picture-status {
+html.lkf-extension-enabled.lkf-picture-in-picture-active #lkf-picture-in-picture-status {
   display: block;
 }
 
-.art-video-player .art-control-screenshot {
+html.lkf-extension-enabled .art-video-player .art-control-screenshot {
   display: none !important;
+}
+
+/* Remove the site's subtitle-off and duplicate HLS quality controls. The
+   extension-owned quality selector is explicitly retained. */
+html.lkf-extension-enabled .art-video-player .art-controls-right >
+.art-control-control10[aria-label="자막 끄기"],
+html.lkf-extension-enabled .art-video-player .art-controls-right > [aria-label="Subtitle Off"],
+html.lkf-extension-enabled .art-video-player .art-controls-right >
+.art-control-hls-quality:not(.lkf-quality-control) {
+  display: none !important;
+  visibility: hidden !important;
+  pointer-events: none !important;
 }
 
 /* The supported sub3 players position ArtPlayer's transient play/pause state
    icon at the bottom-right. Hide only that animation; keep the sibling error
    state and the player's click-to-toggle behavior intact. */
-html.lkf-sub3-player-customized .art-state .art-icon-state {
+html.lkf-extension-enabled.lkf-sub3-player-customized .art-state .art-icon-state {
   display: none !important;
   opacity: 0 !important;
   animation: none !important;
   transition: none !important;
 }
 
-html.lkf-sub3-player-customized .art-control-subtitle-backdrop,
-html.lkf-sub3-player-customized .art-control-subtitle-color {
+html.lkf-extension-enabled.lkf-sub3-player-customized .art-control-subtitle-backdrop,
+html.lkf-extension-enabled.lkf-sub3-player-customized .art-control-subtitle-color {
   display: none !important;
   pointer-events: none !important;
 }
 
 /* The composite canvas and its proxy video only feed the browser PIP window. */
-.lkf-picture-in-picture-proxy {
+html.lkf-extension-enabled .lkf-picture-in-picture-proxy {
   position: fixed !important;
   left: -10000px !important;
   top: 0 !important;
@@ -233,7 +503,7 @@ html.lkf-sub3-player-customized .art-control-subtitle-color {
   pointer-events: none !important;
 }
 
-#lkf-web-fullscreen-toast {
+html.lkf-extension-enabled #lkf-web-fullscreen-toast {
   position: fixed;
   left: 50%;
   bottom: 76px;
@@ -249,7 +519,7 @@ html.lkf-sub3-player-customized .art-control-subtitle-color {
   transition: opacity 120ms ease, transform 120ms ease;
 }
 
-#lkf-web-fullscreen-toast.show {
+html.lkf-extension-enabled #lkf-web-fullscreen-toast.show {
   opacity: 1;
   transform: translate(-50%, 0);
 }

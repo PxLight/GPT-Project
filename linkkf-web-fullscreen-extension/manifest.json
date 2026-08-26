@@ -1,18 +1,32 @@
 {
   "manifest_version": 3,
   "name": "Linkkf Player Tools",
-  "version": "0.5.6",
+  "version": "0.9.0",
   "description": "Adds web-fullscreen and Picture-in-Picture controls to Linkkf video players.",
+  "permissions": ["storage"],
   "action": {
-    "default_title": "Linkkf Player Tools"
+    "default_title": "Linkkf Player Tools",
+    "default_popup": "popup.html"
   },
   "content_scripts": [
     {
       "matches": [
+        "https://*.sub2.top/*",
+        "https://*.sub3.top/*",
+        "https://*.myani.app/*"
+      ],
+      "js": ["quality-bridge.js"],
+      "all_frames": true,
+      "run_at": "document_idle",
+      "world": "MAIN"
+    },
+    {
+      "matches": [
         "https://linkkf.tckopke.com/*",
         "https://*.linkkf.tckopke.com/*",
-        "https://play.sub3.top/*",
-        "https://playv2.sub3.top/*"
+        "https://*.sub2.top/*",
+        "https://*.sub3.top/*",
+        "https://*.myani.app/*"
       ],
       "js": ["content.js"],
       "css": ["content.css"],
